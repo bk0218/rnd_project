@@ -21,41 +21,87 @@ object rnd_result {
     ///////////////////////
     val sc = spark.sparkContext
 
-    val a = double2Double(1)
-    val b = double2Double(1)
-    val w1 = 0.5
-    val w2 = 0.5
+val a = double2Double(1)
+val b = double2Double(1)
+val w1 = 0.5
+val w2 = 0.5
 
-    val sim = scala.util.Random
+val sim = scala.util.Random
 
-    case class myClass(STD_NO: Int, SIM: Double, TRUST: Double, Result: Double)
-    import spark.implicits._
-    val list0 = (1 to 100).map { x =>
-      val STD_NO = x
-      val tSim = sim.nextDouble()
-      val tTrust = sim.nextDouble()
-      val tResult = 0
-      val res = myClass(STD_NO, tSim, tTrust, tResult)
-      res
-    }
-    val myDF = list0.toDF()
-    myDF.show()
+case class myClass(STD_NO: Int, SIM: Double, TRUST: Double, Result: Double)
+import spark.implicits._
+val list0 = (1 to 100).map { x =>
+  val STD_NO = x
+  val tSim = sim.nextDouble()
+  val tTrust = sim.nextDouble()
+  val tResult = 0
+  val res = myClass(STD_NO, tSim, tTrust, tResult)
+  res
+}
+val myDF = list0.toDF()
+myDF.show()
 
-    case class myClass2(STD_NO: Int, SIM_Result: Double, TRUST_Result: Double, Result: Double)
-    val list1 = list0.map { row =>
-      val c1 = row.SIM * a * w1
-      val c2 = row.TRUST * b * w2
-      val c3 = c1 + c2
-      val res = myClass2(row.STD_NO, c1, c2, c3)
-      res
-    }
+case class myClass2(STD_NO: Int, SIM_Result: Double, TRUST_Result: Double, Result: Double)
+val list1 = list0.map { row =>
+  val c1 = row.SIM * a * w1
+  val c2 = row.TRUST * b * w2
+  val c3 = c1 + c2
+  val res = myClass2(row.STD_NO, c1, c2, c3)
+  res
+}
 
-    val myDF2 = list1.toDF().orderBy(desc("Result"))
-    myDF2.show()
+val myDF2 = list1.toDF().orderBy(desc("Result"))
+myDF2.show()
 
-    val myDF3 = list1.toDF().orderBy(desc("Result")).limit(10)
-    myDF3.show()
+val myDF3 = list1.toDF().orderBy(desc("Result")).limit(10)
+myDF3.show()
 
+//DF -> List로 변경
+var reducedDF = myDF3.select("STD_NO", "Result").distinct()
+import org.apache.spark.sql.functions.collect_list
+reducedDF
+  .groupBy("STD_NO")
+  .agg(collect_list($"Result").as("Result"))
+  .rdd
+  .map(row => (row(0).toString -> row(1).asInstanceOf[scala.collection.mutable.WrappedArray[String]].toList))
+  .collectAsMap()
+
+reducedDF.groupBy("STD_NO").agg(collect_list($"Result").as("Result"))
+
+  .rdd.map(row => (row(0).toString -> row(1).asInstanceOf[scala.collection.mutable.WrappedArray[String]].toList)).collectAsMap()
+
+//임의의 학생 5명 (컴퓨터공학과 임의로 생성)
+
+var top_result1 = 20190030
+var top_result2 = 20170063
+var top_result3 = 20142915
+var top_result4 = 20152634
+var top_result5 = 20142824
+
+//var gradCorpUri_DF = gradCorpUri_table.select(col("GCI_STD_NO"), col("GCI_SUST_CD_NM")).distinct.toDF
+//var clPassUri_DF = clPassUri_table.select(col("SUST_CD_NM"), col("STD_NO"), col("SBJT_KOR_NM")).distinct.toDF
+//var student_same = clPassUri_DF.filter(clPassUri_DF("SUST_CD_NM").equalTo("STD_NO"))
+//clPassUri_DF.select(collect_list("SBJT_KOR_NM")).show()
+
+// 교과목수료 테이블 중 학번, 학과, 교과목번호, 과목명
+var clPassUri_res = clPassUri_table.select(col("STD_NO"), col("SUST_CD_NM"), col("SBJT_KEY_CD"), col("SBJT_KOR_NM")).distinct.toDF
+clPassUri_res.show()
+
+var std_sbjt_temp1 = clPassUri_res.filter(clPassUri_res("STD_NO").equalTo(s"${top_result1}"))
+var std_sbjt_temp2 = clPassUri_res.filter(clPassUri_res("STD_NO").equalTo(s"${top_result2}"))
+var std_sbjt_temp3 = clPassUri_res.filter(clPassUri_res("STD_NO").equalTo(s"${top_result3}"))
+var std_sbjt_temp4 = clPassUri_res.filter(clPassUri_res("STD_NO").equalTo(s"${top_result4}"))
+var std_sbjt_temp5 = clPassUri_res.filter(clPassUri_res("STD_NO").equalTo(s"${top_result5}"))
+
+var std_sbjt_list1 = std_sbjt_temp1.select("SBJT_KOR_NM").rdd.map(r=>r(0)).collect.toList.distinct
+var std_sbjt_list2 = std_sbjt_temp2.select("SBJT_KOR_NM").rdd.map(r=>r(0)).collect.toList.distinct
+var std_sbjt_list3 = std_sbjt_temp3.select("SBJT_KOR_NM").rdd.map(r=>r(0)).collect.toList.distinct
+var std_sbjt_list4 = std_sbjt_temp4.select("SBJT_KOR_NM").rdd.map(r=>r(0)).collect.toList.distinct
+var std_sbjt_list5 = std_sbjt_temp5.select("SBJT_KOR_NM").rdd.map(r=>r(0)).collect.toList.distinct
+
+val dfs = Seq(std_sbjt_list1, std_sbjt_list2, std_sbjt_list3, std_sbjt_list4, std_sbjt_list5)
+
+var top_std_sbjt_result = dfs.reduce(_ union _)
 
   }
 
