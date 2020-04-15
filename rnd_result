@@ -87,12 +87,14 @@ var top_result5 = 20142824
 var clPassUri_res = clPassUri_table.select(col("STD_NO"), col("SUST_CD_NM"), col("SBJT_KEY_CD"), col("SBJT_KOR_NM")).distinct.toDF
 clPassUri_res.show()
 
+// 교과목수료에 있는 STD_NO와 일치하는 학번 검색
 var std_sbjt_temp1 = clPassUri_res.filter(clPassUri_res("STD_NO").equalTo(s"${top_result1}"))
 var std_sbjt_temp2 = clPassUri_res.filter(clPassUri_res("STD_NO").equalTo(s"${top_result2}"))
 var std_sbjt_temp3 = clPassUri_res.filter(clPassUri_res("STD_NO").equalTo(s"${top_result3}"))
 var std_sbjt_temp4 = clPassUri_res.filter(clPassUri_res("STD_NO").equalTo(s"${top_result4}"))
 var std_sbjt_temp5 = clPassUri_res.filter(clPassUri_res("STD_NO").equalTo(s"${top_result5}"))
 
+//
 var std_sbjt_list1 = std_sbjt_temp1.select("SBJT_KOR_NM").rdd.map(r=>r(0)).collect.toList.distinct
 var std_sbjt_list2 = std_sbjt_temp2.select("SBJT_KOR_NM").rdd.map(r=>r(0)).collect.toList.distinct
 var std_sbjt_list3 = std_sbjt_temp3.select("SBJT_KOR_NM").rdd.map(r=>r(0)).collect.toList.distinct
@@ -100,8 +102,13 @@ var std_sbjt_list4 = std_sbjt_temp4.select("SBJT_KOR_NM").rdd.map(r=>r(0)).colle
 var std_sbjt_list5 = std_sbjt_temp5.select("SBJT_KOR_NM").rdd.map(r=>r(0)).collect.toList.distinct
 
 val dfs = Seq(std_sbjt_list1, std_sbjt_list2, std_sbjt_list3, std_sbjt_list4, std_sbjt_list5)
+dfs.map((_, 1L)).reduceByKey(_+_).print
 
-var top_std_sbjt_result = dfs.reduce(_ union _)
+  var top_std_sbjt_result = dfs.reduce(_ union _)
+
+// count
+var result = sc.parallelize(top_std_sbjt_result).countByValue()
+ListMap(result.toSeq.sortBy(_._1):_*)
 
   }
 
