@@ -199,22 +199,21 @@ val outActUri_CD03 = OAM_STD_NO.map{ stdno =>
   val res = outActUri_DF.filter(outActUri_DF("OAM_STD_NO").equalTo(s"${stdno}"))
   res
 }.map{ x =>
-  val res = x.select("OAM_TYPE_CD").filter($"OAM_TYPE_CD" === "OAMTYPCD03" || $"OAM_TYPE_CD" ==="OAMTYPCD04" || $"OAM_TYPE_CD" ==="OAMTYPCD05").collect.toList.map( x=> x.toString)
+  val res = x.select("OAM_TYPE_CD").filter($"OAM_TYPE_CD" === "OAMTYPCD03" || $"OAM_TYPE_CD" ==="OAMTYPCD04" || $"OAM_TYPE_CD" ==="OAMTYPCD05").collect.toList
   res
 }.flatMap( x=> x).groupBy(x => x).mapValues(_.length).toList.sortBy(x => x._2).reverse
 
+val result = outActUri_CD03.map(x => x._2)
+val avg = sum(result) / OAM_STD_NO.count
 
-val CD03_top5 = outActUri_CD03.take(5)
+import sqlContext.implicits._
 
-val result_CD03 = outActUri_CD03.map{ x =>
-  val res = outActUri_CD03.
-
+case class myClass3(OAM_TYPE_CD: Int, count : Int)
+val list3 = result.map{ row =>
+  val avg = row / OAM_STD_NO.length
+  val res3 = ("OAM_TYPE_CD", avg)
+  res3
 }
-
-
-
-
-
 
 //비교과  테이블 중 학번, 학과, 교과목번호, 과목명
 
