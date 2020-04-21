@@ -97,22 +97,6 @@ def setMongoDF_result(
 
 //setMongoDF_result(spark, dataframe명)
 
-//테이블 명세서 참고
-val replyUri = "CPS_BOARD_REPLY"  //댓글
-val codeUri = "CPS_CODE_MNG"  //통합 코드관리 테이블
-val gradCorpUri = "CPS_GRADUATE_CORP_INFO"  //졸업 기업
-val ncrInfoUri = "CPS_NCR_PROGRAM_INFO"  //비교과 정보
-val ncrStdInfoUri = "CPS_NCR_PROGRAM_STD"  //비교과 신청학생
-val outActUri = "CPS_OUT_ACTIVITY_MNG"  //교외활동
-val jobInfoUri = "CPS_SCHOOL_EMPLOY_INFO"  //채용정보-관리자 등록
-val sjobInfoUri = "CPS_SCHOOL_EMPLOY_STD_INFO"  //채용정보 신청 학생 정보(student job info)
-
-val deptInfoUri = "V_STD_CDP_DEPT"  //학과 정보 (department info)
-val clPassUri = "V_STD_CDP_PASSCURI" //교과목 수료(class pass)
-val stInfoUri = "V_STD_CDP_SREG"  //학생 정보 (student info)
-val pfInfoUri = "V_STD_CDP_STAF"  //교수 정보 (professor info)
-val clInfoUri = "V_STD_CDP_SUBJECT"  //교과 정보 (class info)
-
 val test = getMongoDF2(spark, gradCorpUri)
 
 val rdd = test.select("GCI_CORP_NM") //로우로 해당 컬럼들 읽어옴
