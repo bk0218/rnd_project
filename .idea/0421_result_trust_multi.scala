@@ -90,12 +90,28 @@ def setMongoDF(
 
 //추천결과팀 데이터 저장
 def setMongoDF_result(
-                spark : SparkSession,
-                df : DataFrame ) = {
+                       spark : SparkSession,
+                       df : DataFrame ) = {
   df.saveToMongoDB(WriteConfig(Map("uri"->(Result_output_base))))
 }
 
 //setMongoDF_result(spark, dataframe명)
+
+//테이블 명세서 참고
+val replyUri = "CPS_BOARD_REPLY"  //댓글
+val codeUri = "CPS_CODE_MNG"  //통합 코드관리 테이블
+val gradCorpUri = "CPS_GRADUATE_CORP_INFO"  //졸업 기업
+val ncrInfoUri = "CPS_NCR_PROGRAM_INFO"  //비교과 정보
+val ncrStdInfoUri = "CPS_NCR_PROGRAM_STD"  //비교과 신청학생
+val outActUri = "CPS_OUT_ACTIVITY_MNG"  //교외활동
+val jobInfoUri = "CPS_SCHOOL_EMPLOY_INFO"  //채용정보-관리자 등록
+val sjobInfoUri = "CPS_SCHOOL_EMPLOY_STD_INFO"  //채용정보 신청 학생 정보(student job info)
+
+val deptInfoUri = "V_STD_CDP_DEPT"  //학과 정보 (department info)
+val clPassUri = "V_STD_CDP_PASSCURI" //교과목 수료(class pass)
+val stInfoUri = "V_STD_CDP_SREG"  //학생 정보 (student info)
+val pfInfoUri = "V_STD_CDP_STAF"  //교수 정보 (professor info)
+val clInfoUri = "V_STD_CDP_SUBJECT"  //교과 정보 (class info)
 
 val test = getMongoDF2(spark, gradCorpUri)
 
@@ -130,7 +146,8 @@ for(i<-0 until corps.size){
   if(df.collect.size>0){
     var add = df.select("기업가중치").as[String].collect()(0).toInt*w1*a+df.select("직원수 가중치").as[String].collect()(0).toInt*w2*b
     for(j<-0 until filter.size){
-      tuples = tuples :+ (filter(j)(0).toString.toInt, add.toString.toDouble)
+      //      tuples = tuples :+ (filter(j)(0).toString.toInt, add.toString.toDouble)
+      tuples = tuples :+ (filter(j)(0).toString.toInt, add.toString.asInstanceOf[Double])
     }
   }else{
     for(j<-0 until filter.size){
@@ -156,6 +173,25 @@ con1.show()
 // df : DataFrame ) = {
 // df.saveToMongoDB(WriteConfig(Map("uri"->(base+coll))))
 // }
+
+val replyUri_table = getMongoDF(spark, replyUri)  //댓글
+val codeUri_table =  getMongoDF(spark, codeUri)  //통합 코드관리 테이블
+val gradCorpUri_table =  getMongoDF(spark, gradCorpUri)  //졸업 기업
+val ncrInfoUri_table =  getMongoDF(spark, ncrInfoUri)  //비교과 정보
+val ncrStdInfoUri_table =  getMongoDF(spark, ncrStdInfoUri)  //비교과 신청학생
+val outActUri_table =  getMongoDF(spark, outActUri)  //교외활동
+val jobInfoUri_table =  getMongoDF(spark, jobInfoUri)  //채용정보-관리자 등록
+val sjobInfoUri_table =  getMongoDF(spark, sjobInfoUri)  //채용정보 신청 학생 정보(student job info)
+
+
+val deptInfoUri_table =  getMongoDF(spark, deptInfoUri)  //학과 정보 (department info)
+val clPassUri_table =  getMongoDF(spark, clPassUri) //교과목 수료(class pass)
+val stInfoUri_table =  getMongoDF(spark, stInfoUri)  //학생 정보 (student info)
+val pfInfoUri_table =  getMongoDF(spark, pfInfoUri)  //교수 정보 (professor info)
+val clInfoUri_table =  getMongoDF(spark, clInfoUri)  //교과 정보 (class info)
+
+val cpsStarUri_table = getMongoDF(spark, cpsStarUri)  //교과/비교과용 별점 테이블
+val userSimilarity_table = getMongoDF(spark, userSimilarityUri) //유사도 분석 팀이 생성한 테이블
 
 val a = double2Double(1)
 val b = double2Double(1)
@@ -210,7 +246,7 @@ reducedDF.groupBy("STD_NO").agg(collect_list($"Result").as("Result")).rdd.map(ro
 var clPassUri_res = clPassUri_table.select(col("STD_NO"), col("SUST_CD_NM"), col("SBJT_KEY_CD"), col("SBJT_KOR_NM")).distinct.toDF
 clPassUri_res.show()
 
-val std_arr = Seq(20190030, 20170063, 20142915, 20152634, 20142824)
+val std_arr = Seq(20190030, 20170063, 20142915, 20152634, 20142824, 20161627)
 val std_sbjt_arr = std_arr.map{ stdno =>
   val res = clPassUri_res.filter(clPassUri_res("STD_NO").equalTo(s"${stdno}"))
   res
@@ -219,7 +255,74 @@ val std_sbjt_arr = std_arr.map{ stdno =>
   res
 }.flatMap( x=> x).groupBy(x => x).mapValues(_.length).toList.sortBy(x => x._2).reverse
 
-val PassUri_top5 = std_sbjt_arr.take(5)
+//콘텐츠 신뢰도 DF->list변환(reduceDF_con1)
+import org.apache.spark.sql.functions.collect_list
+var reducedDF_con1 = con1.select("STAR_KEY_ID", "STAR_POINT").distinct()
+
+reducedDF_con1.groupBy("STAR_KEY_ID").agg(collect_list($"STAR_POINT").as("STAR_POINT")).rdd.map(row => (row(0).toString -> row(1).asInstanceOf[scala.collection.mutable.WrappedArray[String]].toList)).collectAsMap().map(x => (x._1, x._2.map(x => x.toFloat)))
+
+//콘텐츠 신뢰도 형변환
+val reducedDF_con2 = reducedDF_con1.groupBy("STAR_KEY_ID").agg(collect_list($"STAR_POINT").as("STAR_POINT")).rdd.map(row => (row(0).toString -> row(1).toString)).collect.map{ x =>
+  val sbjt = x._1
+  val starPoint = x._2.slice(13,x._2.length-1).toDouble
+  (sbjt, starPoint)
+}
+
+//교과목수료 테이블 형변환
+val std_sbjt_arr2 = std_sbjt_arr.map{ x =>
+  val k = x._1
+  val key = k.slice(1, k.length-1)
+  (key, x._2)
+}
+
+//콘텐츠신뢰도 STAR_KEY_ID와 교과목수료 SBJT_KEY_CD일치 여부에 따라 값 곱하기
+val res_arr = std_sbjt_arr2.map { x =>
+  val sbjt = x._1
+  val filtered_sbjt_arr = reducedDF_con2.filter( x=> x._1 == sbjt)
+  val v = if(filtered_sbjt_arr.isEmpty) x._2
+  else filtered_sbjt_arr(0)._2 * x._2
+  (sbjt, v)
+}
+
+//교과목 결과값에 콘텐츠 신뢰도를 곱해 재 랭킹
+val PassUri_top5 = res_arr.sortBy(x => x._2).reverse.take(5)
+
+
+//비교과 신청학생 테이블 중 학번, 비교과 프로그램 학생키아이디, 비교과 프로그램 학생키아이디, 과목명
+//NPS_STATE 코드 (NCR_T07_P00 : 대기신청, NCR_T07_P01 : 승인대기, NCR_T07_P02 :승인, NCR_T07_P03 : 학생취소,
+//NCR_T07_P04 : 관리자취소, NCR_T07_P05 : 이수, NCR_T07_P06 : 미이수, NCR_T07_P07 : 반려)
+
+var ncrStdInfoUri_res = ncrStdInfoUri_table.select(col("NPS_STD_NO"), col("NPS_KEY_ID"), col("NPI_KEY_ID"), col("NPS_STATE")).distinct.toDF
+ncrStdInfoUri_res.show()
+
+// 데이터 학번 20142820, 20142932, 20152611, 20152615
+//  val dfs_2 = Seq(std_STAR_KEY_list1, std_STAR_KEY_list2, std_STAR_KEY_list3, std_STAR_KEY_list4)
+val std_arr2 = Seq(201937001, 20142932, 20152611, 20152615, 201926041)
+val ncrStdInfoUri_arr = std_arr2.map{ stdno =>
+  val res = ncrStdInfoUri_res.filter(ncrStdInfoUri_res("NPS_STD_NO").equalTo(s"${stdno}")).filter($"NPS_STATE" === "NCR_T07_P05")
+  res
+}.map{ x =>
+  val res = x.select("NPI_KEY_ID").collect.toList.map( x=> x.toString).distinct
+  res
+}.flatMap( x=> x).groupBy(x => x).mapValues(_.length).toList.sortBy(x => x._2).reverse
+
+//비교과 신청학생 테이블 형변환
+val ncrStdInfoUri_arr2 = ncrStdInfoUri_arr.map{ x =>
+  val k = x._1
+  val key = k.slice(1, k.length-1)
+  (key, x._2)
+}
+
+//콘텐츠신뢰도 STAR_KEY_ID와 비교과 NPI_KEY_ID 일치 여부에 따라 값 곱하기
+val res_arr2 = ncrStdInfoUri_arr2.map { x =>
+  val ncr = x._1
+  val filtered_ncrStdInfoUri = reducedDF_con2.filter( x=> x._1 == ncr)
+  val v = if(filtered_ncrStdInfoUri.isEmpty) x._2
+  else filtered_ncrStdInfoUri(0)._2 * x._2
+  (ncr, v)
+}
+
+val NCR_std_Info_top5 = res_arr2.sortBy(x => x._2).reverse.take(5)
 
 
 //-------------------- # # # 자율활동 리스트 # # # ------------------------------
@@ -232,7 +335,8 @@ val PassUri_top5 = std_sbjt_arr.take(5)
 var outActUri_DF = outActUri_table.select(col("OAM_STD_NO"), col("OAM_TYPE_CD"), col("OAM_TITLE"))
 outActUri_DF.show()
 
-val OAM_STD_NO = Seq(201937030,201926086,201937040)
+val OAM_STD_NO = Seq(201937027,201926086,201937040)
+
 
 //---------------------자율활동 추천 code list(자격증 CD01, 어학 CD02)----------------------
 
@@ -274,21 +378,3 @@ val list3 = result.map{ row =>
   val res3 = ("OAM_TYPE_CD", avg)
   res3
 }
-
-//비교과 신청학생 테이블 중 학번, 비교과 프로그램 학생키아이디, 비교과 프로그램 학생키아이디, 과목명
-//NPS_STATE 코드 (NCR_T07_P00 : 대기신청, NCR_T07_P01 : 승인대기, NCR_T07_P02 :승인, NCR_T07_P03 : 학생취소,
-//NCR_T07_P04 : 관리자취소, NCR_T07_P05 : 이수, NCR_T07_P06 : 미이수, NCR_T07_P07 : 반려)
-
-var ncrStdInfoUri_res = ncrStdInfoUri_table.select(col("NPS_STD_NO"), col("NPS_KEY_ID"), col("NPI_KEY_ID"), col("NPS_STATE")).distinct.toDF
-ncrStdInfoUri_res.show()
-
-val std_arr2 = Seq(201937001, 20142932, 20152611, 20152615)
-val ncrStdInfoUri_arr2 = std_arr2.map{ stdno =>
-  val res = ncrStdInfoUri_res.filter(ncrStdInfoUri_res("NPS_STD_NO").equalTo(s"${stdno}")).filter($"NPS_STATE" === "NCR_T07_P05")
-  res
-}.map{ x =>
-  val res = x.select("NPI_KEY_ID").collect.toList.map( x=> x.toString).distinct
-  res
-}.flatMap( x=> x).groupBy(x => x).mapValues(_.length).toList.sortBy(x => x._2).reverse
-
-val top5 = ncrStdInfoUri_arr2.take(3)
