@@ -15,7 +15,6 @@ import org.apache.spark.sql.types.IntegerType
 import org.apache.spark.sql.Column
 import org.apache.log4j.Logger
 import org.apache.log4j.Level
-import org.example.org
 
 // val base ="mongodb://127.0.0.1/cpmongo."
 
@@ -25,6 +24,7 @@ val SREG_output_base = "mongodb://127.0.0.1/cpmongo_distinct.SREG_SIM"
 val NCR_output_base = "mongodb://127.0.0.1/cpmongo_distinct.NCR_SIM"
 val ACT_output_base = "mongodb://127.0.0.1/cpmongo_distinct.ACTIVITY_SIM"
 //교과: SREG_SIM, 비교과: NCR_SIM, 자율활동: ACTIVITY_SIM
+val Result_output_base = "mongodb://127.0.0.1/cpmongo_distinct.Recommend_Result"
 
 
 val replyUri = "CPS_BOARD_REPLY"  //댓글
@@ -65,7 +65,105 @@ def setMongoDF(
 }
 
 //setMongoDF(spark, dataframe명)
+val base ="mongodb://127.0.0.1/cpmongo."
+val base2 = "mongodb://127.0.0.1/cpmongo_distinct."
 
+def getMongoDF(
+                spark : SparkSession,
+                coll : String ) : DataFrame = {
+  spark.read.mongo(ReadConfig(Map("uri"->(base+coll))))
+}
+
+def getMongoDF2(
+                 spark : SparkSession,
+                 coll : String ) : DataFrame = {
+  spark.read.mongo(ReadConfig(Map("uri"->(base2+coll))))
+}
+
+//저장하기 setMongo(spark, Uri, dataframe)으로 사용
+def setMongoDF(
+                spark : SparkSession,
+                coll: String,
+                df : DataFrame ) = {
+  df.saveToMongoDB(WriteConfig(Map("uri"->(base+coll))))
+}
+
+//추천결과팀 데이터 저장
+def setMongoDF_result(
+                spark : SparkSession,
+                df : DataFrame ) = {
+  df.saveToMongoDB(WriteConfig(Map("uri"->(Result_output_base))))
+}
+
+//setMongoDF_result(spark, dataframe명)
+
+//테이블 명세서 참고
+val replyUri = "CPS_BOARD_REPLY"  //댓글
+val codeUri = "CPS_CODE_MNG"  //통합 코드관리 테이블
+val gradCorpUri = "CPS_GRADUATE_CORP_INFO"  //졸업 기업
+val ncrInfoUri = "CPS_NCR_PROGRAM_INFO"  //비교과 정보
+val ncrStdInfoUri = "CPS_NCR_PROGRAM_STD"  //비교과 신청학생
+val outActUri = "CPS_OUT_ACTIVITY_MNG"  //교외활동
+val jobInfoUri = "CPS_SCHOOL_EMPLOY_INFO"  //채용정보-관리자 등록
+val sjobInfoUri = "CPS_SCHOOL_EMPLOY_STD_INFO"  //채용정보 신청 학생 정보(student job info)
+
+val deptInfoUri = "V_STD_CDP_DEPT"  //학과 정보 (department info)
+val clPassUri = "V_STD_CDP_PASSCURI" //교과목 수료(class pass)
+val stInfoUri = "V_STD_CDP_SREG"  //학생 정보 (student info)
+val pfInfoUri = "V_STD_CDP_STAF"  //교수 정보 (professor info)
+val clInfoUri = "V_STD_CDP_SUBJECT"  //교과 정보 (class info)
+
+val test = getMongoDF2(spark, gradCorpUri)
+
+val rdd = test.select("GCI_CORP_NM") //로우로 해당 컬럼들 읽어옴
+val rdd2 = test.select("*")
+
+val corps = rdd.collect.distinct.map(_.toSeq).flatten //읽어온 로우들 한 Seq에 박는 거
+
+def shit(corps: Array[Any]):scala.collection.mutable.Map[Any, Array[org.apache.spark.sql.Row]]={
+  var a = scala.collection.mutable.Map[Any, Array[org.apache.spark.sql.Row]]()
+  for(i<-0 until corps.size){
+    a = a+(corps(i)->rdd2.filter(rdd2("GCI_CORP_NM")===corps(i)).collect)
+  }
+  a}
+
+val corps1 = shit(corps)
+
+//기업 가중치 읽어오는 거
+val test2 = getMongoDF(spark, "CPS_RATING")
+var tuples = Seq[(Int, Double)]()
+val t5 = test.select(col("GCI_STD_NO"), col("GCI_CORP_NM")).distinct.toDF
+
+// (사용자 신뢰도)
+for(i<-0 until corps.size){
+  val a = 0.2
+  val b = 0.125
+  val w1 = 0.5
+  val w2 = 0.5
+  val columns = Seq("GCI_STD_NO", "RATING")
+  var df = test2.filter(test2("기업명")===corps(i)).toDF
+  var filter = t5.filter(t5("GCI_CORP_NM").equalTo(corps(i))).collect
+  if(df.collect.size>0){
+    var add = df.select("기업가중치").as[String].collect()(0).toInt*w1*a+df.select("직원수 가중치").as[String].collect()(0).toInt*w2*b
+    for(j<-0 until filter.size){
+      tuples = tuples :+ (filter(j)(0).toString.toInt, add.toString.toDouble)
+    }
+  }else{
+    for(j<-0 until filter.size){
+      tuples = tuples :+ (filter(j)(0).toString.toInt, 0.0)
+    }
+  }
+}
+//val df = tuples.toDF("GCI_STD_NO", "TRUST")
+
+//콘텐츠 신뢰도
+val test0 = getMongoDF(spark, "CPS_STAR_POINT")
+var con = test0.select(col("STAR_KEY_ID"), col("STAR_POINT"))
+var con1 = con.groupBy("STAR_KEY_ID").agg(avg("STAR_POINT").alias("STAR_POINT"))
+
+//코드 다 실행하고 결과 출력해보는 거
+df.show()
+con1.show()
 
 //예전꺼
 // def setMongoDF(
@@ -103,10 +201,10 @@ val sim = scala.util.Random
 
 case class myClass(STD_NO: Int, SIM: Double, TRUST: Double, Result: Double)
 import spark.implicits._
-val list0 = (1 to 100).map { x =>
-  val STD_NO = x
+val list0 = tuples.map { x =>
+  val STD_NO = x._1
   val tSim = sim.nextDouble()
-  val tTrust = sim.nextDouble()
+  val tTrust = x._2
   val tResult = 0
   val res = myClass(STD_NO, tSim, tTrust, tResult)
   res
@@ -114,6 +212,7 @@ val list0 = (1 to 100).map { x =>
 val myDF = list0.toDF()
 myDF.show()
 
+//가중치(w), 상수(a,b), 최종추천 학생 계산부분
 case class myClass2(STD_NO: Int, SIM_Result: Double, TRUST_Result: Double, Result: Double)
 val list1 = list0.map { row =>
   val c1 = row.SIM * a * w1
@@ -130,8 +229,9 @@ val myDF3 = list1.toDF().orderBy(desc("Result")).limit(10)
 myDF3.show()
 
 //DF -> List로 변경
-var reducedDF = myDF3.select("STD_NO", "Result").distinct()
 import org.apache.spark.sql.functions.collect_list
+var reducedDF = myDF3.select("STD_NO", "Result").distinct()
+
 reducedDF
   .groupBy("STD_NO")
   .agg(collect_list($"Result").as("Result"))
@@ -139,9 +239,7 @@ reducedDF
   .map(row => (row(0).toString -> row(1).asInstanceOf[scala.collection.mutable.WrappedArray[String]].toList))
   .collectAsMap()
 
-reducedDF.groupBy("STD_NO").agg(collect_list($"Result").as("Result"))
-
-  .rdd.map(row => (row(0).toString -> row(1).asInstanceOf[scala.collection.mutable.WrappedArray[String]].toList)).collectAsMap()
+reducedDF.groupBy("STD_NO").agg(collect_list($"Result").as("Result")).rdd.map(row => (row(0).toString -> row(1).asInstanceOf[scala.collection.mutable.WrappedArray[String]].toList)).collectAsMap()
 
 // 교과목수료 테이블 중 학번, 학과, 교과목번호, 과목명
 var clPassUri_res = clPassUri_table.select(col("STD_NO"), col("SUST_CD_NM"), col("SBJT_KEY_CD"), col("SBJT_KOR_NM")).distinct.toDF
@@ -152,7 +250,7 @@ val std_sbjt_arr = std_arr.map{ stdno =>
   val res = clPassUri_res.filter(clPassUri_res("STD_NO").equalTo(s"${stdno}"))
   res
 }.map{ x =>
-  val res = x.select("SBJT_KOR_NM").collect.toList.map( x=> x.toString)
+  val res = x.select("SBJT_KEY_CD").collect.toList.map( x=> x.toString)
   res
 }.flatMap( x=> x).groupBy(x => x).mapValues(_.length).toList.sortBy(x => x._2).reverse
 
@@ -204,9 +302,6 @@ val outActUri_CD03 = OAM_STD_NO.map{ stdno =>
 }.flatMap( x=> x).groupBy(x => x).mapValues(_.length).toList.sortBy(x => x._2).reverse
 
 val result = outActUri_CD03.map(x => x._2)
-val avg = sum(result) / OAM_STD_NO.count
-
-import sqlContext.implicits._
 
 case class myClass3(OAM_TYPE_CD: Int, count : Int)
 val list3 = result.map{ row =>
@@ -215,20 +310,22 @@ val list3 = result.map{ row =>
   res3
 }
 
-//비교과  테이블 중 학번, 학과, 교과목번호, 과목명
+//비교과 신청학생 테이블 중 학번, 비교과 프로그램 학생키아이디, 비교과 프로그램 학생키아이디, 과목명
+//NPS_STATE 코드 (NCR_T07_P00 : 대기신청, NCR_T07_P01 : 승인대기, NCR_T07_P02 :승인, NCR_T07_P03 : 학생취소,
+//NCR_T07_P04 : 관리자취소, NCR_T07_P05 : 이수, NCR_T07_P06 : 미이수, NCR_T07_P07 : 반려)
 
-var cpsStarUri_res = cpsStarUri_table.select(col("STD_NO"), col("STAR_KEY_ID")).distinct.toDF
-cpsStarUri_res.show()
+var ncrStdInfoUri_res = ncrStdInfoUri_table.select(col("NPS_STD_NO"), col("NPS_KEY_ID"), col("NPI_KEY_ID"), col("NPS_STATE")).distinct.toDF
+ncrStdInfoUri_res.show()
 
 // 데이터 학번 20142820, 20142932, 20152611, 20152615
 //  val dfs_2 = Seq(std_STAR_KEY_list1, std_STAR_KEY_list2, std_STAR_KEY_list3, std_STAR_KEY_list4)
-val std_arr2 = Seq(20142820, 20142932, 20152611, 20152615)
-val std_STAR_KEY_arr2 = std_arr2.map{ stdno =>
-  val res = cpsStarUri_res.filter(cpsStarUri_res("STD_NO").equalTo(s"${stdno}"))
+val std_arr2 = Seq(201937001, 20142932, 20152611, 20152615)
+val ncrStdInfoUri_arr2 = std_arr2.map{ stdno =>
+  val res = ncrStdInfoUri_res.filter(ncrStdInfoUri_res("NPS_STD_NO").equalTo(s"${stdno}")).filter($"NPS_STATE" === "NCR_T07_P05")
   res
 }.map{ x =>
-  val res = x.select("STAR_KEY_ID").collect.toList.map( x=> x.toString).distinct
+  val res = x.select("NPI_KEY_ID").collect.toList.map( x=> x.toString).distinct
   res
 }.flatMap( x=> x).groupBy(x => x).mapValues(_.length).toList.sortBy(x => x._2).reverse
 
-val top5 = std_STAR_KEY_arr2.take(5)
+val top5 = ncrStdInfoUri_arr2.take(3)
