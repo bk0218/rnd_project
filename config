@@ -1,16 +1,16 @@
-[SERVER_INFO]
+//server info
 server_IP = 203.255.92.185
 
 
 
-[ORACLE_INFO]
+//oracle info
 oracle_IP    = 222.122.47.39
-oracle_port  = 1521
-oracle_SID = orcl
-oracle_id   = cpsrndver
+oracle_info1 = 1521
+oracle_info2 = orcl
+oracle_id    = cpsrndver
 oracle_pass  = cpsrndver123
 
 
-[VERSION]
-mongodb_version = 4.7
-python_version  = 3
+//version
+mongon_version =
+python_version = 3

@@ -1,30 +1,31 @@
 #!/usr/bin/python3.6
 # -*- coding: UTF-8 -*-
-import sys
+
 import cx_Oracle
 import os
 from json import dumps
 from kafka import KafkaProducer
-from kafka.errors import KafkaError
-import datetime
-import logging as log
-
-sys.path.insert(1, '/root/rnd_project/consumer')
-from func import getSerial, getOrigin, makeDictFactory
 
 producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
                          value_serializer=lambda x:
-                         dumps(x).encode('utf-8'))
+                         dumps(x).encode('utf-8'), acks=1)
 
 # JAVA_HOME이 설정되어 있지 않을 경우
 if ("JAVA_HOME" not in os.environ):
     os.environ["JAVA_HOME"] = "[C:\Program Files\Java\jdk1.8.0_231]"
 
-# dictionary형태로 return(moved to func.py at consumer file)
+# dictionary형태로 return
+
+def makeDictFactory(cursor):
+    columnNames = [d[0] for d in cursor.description]
+
+    def createRow(*args):
+        return dict(zip(columnNames, args))
+
+    return createRow
 
 #DB접속하기
-conn = cx_Oracle.connect('cpsrndver/cpsrndver123@222.122.47.39:1521/orcl', encoding='euc-kr')
-conn2 = cx_Oracle.connect('cpsrndver/cpsrndver123@222.122.47.39:1521/orcl', encoding='utf-8')
+conn = cx_Oracle.connect('cpsrndver/cpsrndver123@222.122.47.39:1521/orcl', encoding='UTF-8')
 
 #V_STD_CDP_SREG(학생정보 테이블) 가져오기
 V_STD_CDP_SREG = conn.cursor()
@@ -132,7 +133,6 @@ CPS_CODE_MNG.rowfactory = makeDictFactory(CPS_CODE_MNG)
 results = CPS_CODE_MNG.fetchall()
 
 for result in results:
-    result = getSerial(result)
     data = result
     print(result)
     producer.send('CPS_CODE_MNG', value=data)
@@ -153,7 +153,6 @@ CPS_GRADUATE_CORP_INFO.rowfactory = makeDictFactory(CPS_GRADUATE_CORP_INFO)
 results = CPS_GRADUATE_CORP_INFO.fetchall()
 
 for result in results:
-    result = getSerial(result)
     data = result
     print(result)
     producer.send('CPS_GRADUATE_CORP_INFO', value=data)
@@ -163,7 +162,7 @@ print('CPS_GRADUATE_CORP_INFO 테이블 전송완료')
 CPS_GRADUATE_CORP_INFO.close()
 
 #CPS_NCR_PROGRAM_INFO (비교과_정보_테이블) 가져오기
-CPS_NCR_PROGRAM_INFO = conn2.cursor()
+CPS_NCR_PROGRAM_INFO = conn.cursor()
 CPS_NCR_PROGRAM_INFO.execute('SELECT * FROM CPS_NCR_PROGRAM_INFO')
 
 # 커서 rowfactory로 지정
@@ -173,7 +172,6 @@ CPS_NCR_PROGRAM_INFO.rowfactory = makeDictFactory(CPS_NCR_PROGRAM_INFO)
 results = CPS_NCR_PROGRAM_INFO.fetchall()
 
 for result in results:
-    result = getSerial(result)
     data = result
     print(result)
     producer.send('CPS_NCR_PROGRAM_INFO', value=data)
@@ -193,7 +191,6 @@ CPS_NCR_PROGRAM_STD.rowfactory = makeDictFactory(CPS_NCR_PROGRAM_STD)
 results = CPS_NCR_PROGRAM_STD.fetchall()
 
 for result in results:
-    result = getSerial(result)
     data = result
     print(result)
     producer.send('CPS_NCR_PROGRAM_STD', value=data)
@@ -251,14 +248,9 @@ CPS_BOARD_REPLY.rowfactory = makeDictFactory(CPS_BOARD_REPLY)
 results = CPS_BOARD_REPLY.fetchall()
 
 for result in results:
-    result = getSerial(result)
     data = result
     print(result)
     producer.send('CPS_BOARD_REPLY', value=data)
-    future = producer.send('CPS_BOARD_REPLY', value=data)
-
-#print('CPS_BOARD_REPLY 테이블 전송완료')
-
 
 print('CPS_BOARD_REPLY 테이블 전송완료')
 
@@ -275,7 +267,6 @@ CPS_STAR_POINT.rowfactory = makeDictFactory(CPS_STAR_POINT)
 results = CPS_STAR_POINT.fetchall()
 
 for result in results:
-    result = getSerial(result)
     data = result
     print(result)
     producer.send('CPS_STAR_POINT', value=data)
@@ -295,7 +286,6 @@ CPS_OUT_ACTIVITY_MNG.rowfactory = makeDictFactory(CPS_OUT_ACTIVITY_MNG)
 results = CPS_OUT_ACTIVITY_MNG.fetchall()
 
 for result in results:
-    result = getSerial(result)
     data = result
     print(result)
     producer.send('CPS_OUT_ACTIVITY_MNG', value=data)
@@ -315,7 +305,6 @@ CPS_SCHOOL_EMPLOY_INFO.rowfactory = makeDictFactory(CPS_SCHOOL_EMPLOY_INFO)
 results = CPS_SCHOOL_EMPLOY_INFO.fetchall()
 
 for result in results:
-    result = getSerial(result)
     data = result
     print(result)
     producer.send('CPS_SCHOOL_EMPLOY_INFO', value=data)
@@ -335,7 +324,6 @@ CPS_SCHOOL_EMPLOY_STD_INFO.rowfactory = makeDictFactory(CPS_SCHOOL_EMPLOY_STD_IN
 results = CPS_SCHOOL_EMPLOY_STD_INFO.fetchall()
 
 for result in results:
-    result = getSerial(result)
     data = result
     print(result)
     producer.send('CPS_SCHOOL_EMPLOY_STD_INFO', value=data)
@@ -355,7 +343,6 @@ CPS_EMPLOY_SEARCH_HIS.rowfactory = makeDictFactory(CPS_EMPLOY_SEARCH_HIS)
 results = CPS_EMPLOY_SEARCH_HIS.fetchall()
 
 for result in results:
-    result = getSerial(result)
     data = result
     print(result)
     producer.send('CPS_EMPLOY_SEARCH_HIS', value=data)
