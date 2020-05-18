@@ -82,6 +82,18 @@ df : DataFrame ) = {
 df.saveToMongoDB(WriteConfig(Map("uri"->(USER_SIM_output_base))))
 }
 
+// MongoSpark.save(
+// join_df.write
+//     .option("spark.mongodb.output.uri", "mongodb://127.0.0.1/cpmongo_distinct.USER_SIMILARITY")
+//     .mode("overwrite"))
+
+// 
+// def updatemongoDF_USER_SIM(
+//   spark:SparkSession,
+//   df:DataFrame) = {
+//     df.
+//   }
+
 //
 // def dropMongoDF(
 // spark : SparkSession,
