@@ -76,7 +76,7 @@ import org.apache.spark.mllib.util.MLUtils
 
 
 val List_origin = List("삼성", "네이버", "카카오", "다음", "구글", "하이닉스", "대우", "한화", "엔씨소프트", "현대")
-val List_predict =  List("네이버", "삼성", "카카오", "다음", "하이닉스", "대우", "한화", "구글", "엔씨소프트", "현대")
+val List_predict =  List("lg", "삼성", "카카오", "다음", "하이닉스", "대우", "한화", "구글", "엔씨소프트", "현대")
 
 
 // Load training data in LIBSVM format
